@@ -111,33 +111,28 @@ class KDtree():
                 max_spread = spread
                 split_dim = dim
 
-            # Correctly calculating the median
-            sorted_coords = sorted(coords)
-            median_index = len(sorted_coords) // 2
-            if len(sorted_coords) % 2 == 0:
-                split_value = (sorted_coords[median_index - 1] + sorted_coords[median_index]) / 2
-            else:
-                split_value = sorted_coords[median_index]
+        sorted_coords = sorted(coords)
+        median_index = len(sorted_coords) // 2
+        if len(sorted_coords) % 2 == 0:
+            split_value = (sorted_coords[median_index - 1] + sorted_coords[median_index]) / 2
+        else:
+            split_value = sorted_coords[median_index]
 
-            return split_dim, split_value
-                
+        return split_dim, split_value
+
 
     def _split_leaf(self, leaf, parent, depth):
         dim, split_value = self._find_split_dimension(leaf)
 
-        # Split the data based on the split value and dimension
         left_data = [d for d in leaf.data if d.coords[dim] < split_value]
         right_data = [d for d in leaf.data if d.coords[dim] >= split_value]
 
-        # Ensure balanced splitting for ties at the median
         if len(left_data) == 0 or len(right_data) == 0:
             left_data, right_data = leaf.data[:len(leaf.data)//2], leaf.data[len(leaf.data)//2:]
 
-        # Create new leaf nodes
         left_child = NodeLeaf(left_data)
         right_child = NodeLeaf(right_data)
 
-        # Replace the current leaf with a new internal node
         new_internal_node = NodeInternal(dim, split_value, left_child, right_child)
         if parent is None:
             self.root = new_internal_node
@@ -147,11 +142,11 @@ class KDtree():
             else:
                 parent.rightchild = new_internal_node
 
-        # Recursive splitting if necessary
         if len(left_child.data) > self.m:
             self._split_leaf(left_child, new_internal_node, depth + 1)
         if len(right_child.data) > self.m:
             self._split_leaf(right_child, new_internal_node, depth + 1)
+
 
 
     

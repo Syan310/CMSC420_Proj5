@@ -125,11 +125,9 @@ class KDtree():
     def _split_leaf(self, leaf, parent, depth):
         dim, split_value = self._find_split_dimension(leaf)
 
-        left_data = [d for d in leaf.data if d.coords[dim] < split_value]
-        right_data = [d for d in leaf.data if d.coords[dim] >= split_value]
-
-        if len(left_data) == 0 or len(right_data) == 0:
-            left_data, right_data = leaf.data[:len(leaf.data)//2], leaf.data[len(leaf.data)//2:]
+        # Assign points to the left child if they are less than or equal to the split value
+        left_data = [d for d in leaf.data if d.coords[dim] <= split_value]
+        right_data = [d for d in leaf.data if d.coords[dim] > split_value]
 
         left_child = NodeLeaf(left_data)
         right_child = NodeLeaf(right_data)

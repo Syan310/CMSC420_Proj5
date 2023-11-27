@@ -111,15 +111,16 @@ class KDtree():
                 max_spread = spread
                 split_dim = dim
 
-        # Correctly calculating the median
-        sorted_coords = sorted(coords)
-        median_index = len(sorted_coords) // 2
-        if len(sorted_coords) % 2 == 0:
-            split_value = (sorted_coords[median_index - 1] + sorted_coords[median_index]) / 2
-        else:
-            split_value = sorted_coords[median_index]
+            # Correctly calculating the median
+            sorted_coords = sorted(coords)
+            median_index = len(sorted_coords) // 2
+            if len(sorted_coords) % 2 == 0:
+                split_value = (sorted_coords[median_index - 1] + sorted_coords[median_index]) / 2
+            else:
+                split_value = sorted_coords[median_index]
 
-        return split_dim, split_value
+            return split_dim, split_value
+                
 
     def _split_leaf(self, leaf, parent, depth):
         dim, split_value = self._find_split_dimension(leaf)
@@ -128,7 +129,7 @@ class KDtree():
         left_data = [d for d in leaf.data if d.coords[dim] < split_value]
         right_data = [d for d in leaf.data if d.coords[dim] >= split_value]
 
-        # Ensure a balanced distribution for ties at the median
+        # Ensure balanced splitting for ties at the median
         if len(left_data) == 0 or len(right_data) == 0:
             left_data, right_data = leaf.data[:len(leaf.data)//2], leaf.data[len(leaf.data)//2:]
 
@@ -145,6 +146,12 @@ class KDtree():
                 parent.leftchild = new_internal_node
             else:
                 parent.rightchild = new_internal_node
+
+        # Recursive splitting if necessary
+        if len(left_child.data) > self.m:
+            self._split_leaf(left_child, new_internal_node, depth + 1)
+        if len(right_child.data) > self.m:
+            self._split_leaf(right_child, new_internal_node, depth + 1)
 
 
     

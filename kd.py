@@ -136,6 +136,7 @@ class KDtree():
             self.root, _ = self._delete(self.root, point, 0)
 
     def _delete(self, node, point, depth):
+        
         if isinstance(node, NodeLeaf):
             node.data = [datum for datum in node.data if datum.coords != point]
             if len(node.data) == 0:
@@ -149,10 +150,16 @@ class KDtree():
                 node.rightchild, child_altered = self._delete(node.rightchild, point, depth + 1)
 
             if child_altered:
-                node = self._handle_underpopulated(node)
-                if node and isinstance(node, NodeInternal):
-                    node.splitindex, node.splitvalue = self._choose_split(node)
-                return node, True  # Indicate that the parent might need to update its split
+                # Check if either child is None
+                if node.leftchild is None or node.rightchild is None:
+                    # Replace with the non-empty child if it's a leaf
+                    return (node.leftchild or node.rightchild), True
+
+                # Merge children if they are both underpopulated leaf nodes
+                if self._is_underpopulated(node.leftchild) and self._is_underpopulated(node.rightchild):
+                    return self._merge_children(node.leftchild, node.rightchild), True
+
+            return node, False
 
         return node, False
     
@@ -214,14 +221,17 @@ class KDtree():
                 nearer_node, farther_node = node.leftchild, node.rightchild
             else:
                 nearer_node, farther_node = node.rightchild, node.leftchild
+            
+            dist_to_split = abs(point[dim] - node.splitvalue)
 
             # Search the nearer subtree first
             self._knn_recursive(nearer_node, point, k, depth + 1)
 
             # Check if we need to search the farther subtree
-            if self.knn_list.qsize() < k or self._closer_to_bounding_box(point, node, dim):
+            if len(self.knn_list.queue) < k or (self.knn_list.queue[0][0] ** 2) > dist_to_split ** 2:
                 self._knn_recursive(farther_node, point, k, depth + 1)
-
+                
+                
     def _distance(self, coords1, coords2):
         return sum((c1 - c2) ** 2 for c1, c2 in zip(coords1, coords2)) ** 0.5
     

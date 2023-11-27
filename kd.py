@@ -192,14 +192,14 @@ class KDtree():
         
     def knn(self, k: int, point: tuple[int]) -> str:
         self.leaves_checked = 0
-        self.knn_list = PriorityQueue()
+        self.knn_list = PriorityQueue()  # Min heap for actual distances
         self._knn_recursive(self.root, point, k, 0)
         knn_list = []
 
         while not self.knn_list.empty():
-            knn_list.append(self.knn_list.get()[1].to_json())
+            _, datum = self.knn_list.get()
+            knn_list.append(datum.to_json())
 
-        # Update the key to "leaveschecked" to match the expected format
         return json.dumps({"leaveschecked": self.leaves_checked, "points": knn_list}, indent=2)
 
     def _knn_recursive(self, node, point, k, depth):
@@ -207,14 +207,14 @@ class KDtree():
             return
 
         if isinstance(node, NodeLeaf):
-            # Check each point in the leaf node
             for datum in node.data:
-                dist = self._distance(datum.coords, point)
+                dist_squared = self._distance(datum.coords, point)
                 if len(self.knn_list.queue) < k:
-                    self.knn_list.put((-dist, datum))  # Use negative distance for max heap
-                elif dist < -self.knn_list.queue[0][0]:  # Compare with negative distance
-                    self.knn_list.get()  # Remove the farthest point
-                    self.knn_list.put((-dist, datum))  # Add this point
+                    self.knn_list.put((dist_squared, datum))
+                elif dist_squared < self.knn_list.queue[0][0]:
+                    if len(self.knn_list.queue) == k:
+                        self.knn_list.get()  # Remove the farthest point
+                    self.knn_list.put((dist_squared, datum))
             self.leaves_checked += 1
         else:
             # Determine which subtree is nearer
@@ -231,7 +231,7 @@ class KDtree():
 
                 
     def _distance(self, coords1, coords2):
-        return sum((c1 - c2) ** 2 for c1, c2 in zip(coords1, coords2)) ** 0.5
+        return sum((c1 - c2) ** 2 for c1, c2 in zip(coords1, coords2))  # Return squared distance
     
     def _closer_to_bounding_box(self, point, node, dim):
         # Calculate the squared distance for this dimension

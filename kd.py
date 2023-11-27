@@ -141,10 +141,12 @@ class KDtree():
             else:
                 parent.rightchild = new_internal_node
 
+        # Check if further splitting is needed for each child
         if len(left_child.data) > self.m:
             self._split_leaf(left_child, new_internal_node, depth + 1)
         if len(right_child.data) > self.m:
             self._split_leaf(right_child, new_internal_node, depth + 1)
+
 
 
 

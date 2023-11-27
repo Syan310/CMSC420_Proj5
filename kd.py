@@ -37,52 +37,54 @@ class NodeLeaf():
 
 # KD tree class.
 class KDtree():
-    def  __init__(self,
-                  k    : int,
-                  m    : int,
-                  root = None):
-        self.k    = k
-        self.m    = m
-        self.root = root
 
-    # For the tree rooted at root, dump the tree to stringified JSON object and return.
-    # DO NOT MODIFY.
-    def dump(self) -> str:
-        def _to_dict(node) -> dict:
-            if isinstance(node,NodeLeaf):
-                return {
-                    "p": str([{'coords': datum.coords,'code': datum.code} for datum in node.data])
-                }
+    def insert(self, point: tuple[int], code: str):
+        def _insert_recursive(node, depth):
+            if node is None:
+                return NodeLeaf([Datum(point, code)])
+
+            idx = depth % self.k
+            if point[idx] < (node.splitvalue if node.splitvalue is not None else float('inf')):
+                node.leftchild = _insert_recursive(node.leftchild, depth + 1)
             else:
-                return {
-                    "splitindex": node.splitindex,
-                    "splitvalue": node.splitvalue,
-                    "l": (_to_dict(node.leftchild)  if node.leftchild  is not None else None),
-                    "r": (_to_dict(node.rightchild) if node.rightchild is not None else None)
-                }
-        if self.root is None:
-            dict_repr = {}
-        else:
-            dict_repr = _to_dict(self.root)
-        return json.dumps(dict_repr,indent=2)
+                node.rightchild = _insert_recursive(node.rightchild, depth + 1)
+            return node
 
-    # Insert the Datum with the given code and coords into the tree.
-    # The Datum with the given coords is guaranteed to not be in the tree.
-    def insert(self,point:tuple[int],code:str):
-        thisisaplaceholder = True
+        self.root = _insert_recursive(self.root, 0)
 
-    # Delete the Datum with the given point from the tree.
-    # The Datum with the given point is guaranteed to be in the tree.
-    def delete(self,point:tuple[int]):
-        thisisaplaceholder = True
 
-    # Find the k nearest neighbors to the point.
-    def knn(self,k:int,point:tuple[int]) -> str:
-        # Use the strategy discussed in class and in the notes.
-        # The list should be a list of elements of type Datum.
-        # While recursing, count the number of leaf nodes visited while you construct the list.
-        # The following lines should be replaced by code that does the job.
-        leaveschecked = 0
-        knnlist = []
-        # The following return line can probably be left alone unless you make changes in variable names.
-        return(json.dumps({"leaveschecked":leaveschecked,"points":[datum.to_json() for datum in knnlist]},indent=2))
+    def delete(self, point: tuple[int]):
+        def _delete_recursive(node, depth):
+            if node is None:
+                return None
+
+            idx = depth % self.k
+            if node.data and any(datum.coords == point for datum in node.data):
+                # If it's a leaf node, remove the datum
+                node.data = [datum for datum in node.data if datum.coords != point]
+                return node if node.data else None
+            elif point[idx] < node.splitvalue:
+                node.leftchild = _delete_recursive(node.leftchild, depth + 1)
+            else:
+                node.rightchild = _delete_recursive(node.rightchild, depth + 1)
+            return node
+
+        self.root = _delete_recursive(self.root, 0)
+
+
+    def knn(self, k: int, point: tuple[int]) -> str:
+        def _knn_recursive(node, depth):
+            if node is None:
+                return []
+            
+            idx = depth % self.k
+            next_branch = node.leftchild if point[idx] < node.splitvalue else node.rightchild
+            opposite_branch = node.rightchild if next_branch is node.leftchild else node.leftchild
+
+            best = _knn_recursive(next_branch, depth + 1)
+            if len(best) < k or abs(point[idx] - node.splitvalue) < self._distance(point, best[-1].coords):
+                best.extend(_knn_recursive(opposite_branch, depth + 1))
+            
+            return sorted(best, key=lambda datum: self._distance(point, datum.coords))[:k]
+
+        return json.dumps({"leaveschecked": 0, "points": [datum.to_json() for datum in _knn_recursive(self.root, 0)]}, indent=2)

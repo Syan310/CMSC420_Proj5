@@ -71,115 +71,117 @@ class KDtree():
     # The Datum with the given coords is guaranteed to not be in the tree.
     
     def insert(self, point: tuple[int], code: str):
-        # Create a Datum object from the point and code
-        datum = Datum(point, code)
-
-        # If the tree is empty, create a new leaf node as the root
         if self.root is None:
-            self.root = NodeLeaf([datum])
+            self.root = NodeLeaf([Datum(point, code)])
         else:
-            # Start the insertion process
-            self._insert_recursive(self.root, None, datum, 0)
+            self.root = self._insert(self.root, Datum(point, code), 0)
 
-    def _insert_recursive(self, node, parent, datum, depth):
+    def _insert(self, node, datum, depth):
         if isinstance(node, NodeLeaf):
-            # Add datum to the leaf node
             node.data.append(datum)
-
-            # Check if the leaf node needs to be split
             if len(node.data) > self.m:
-                self._split_leaf(node, parent, depth)
-        else:
-            # Determine the dimension to compare based on depth
-            dim = depth % self.k
-
-            # Decide whether to go left or right
-            if datum.coords[dim] < node.splitvalue:
-                self._insert_recursive(node.leftchild, node, datum, depth + 1)
+                return self._split_leaf(node, depth)
             else:
-                self._insert_recursive(node.rightchild, node, datum, depth + 1)
+                return node
+        else:
+            if datum.coords[node.splitindex] < node.splitvalue:
+                node.leftchild = self._insert(node.leftchild, datum, depth + 1)
+            else:
+                node.rightchild = self._insert(node.rightchild, datum, depth + 1)
+            return node
 
-    def _find_split_dimension(self, leaf):
-        max_spread = -float('inf')
-        split_dim = 0
+    def _split_leaf(self, node, depth):
+        # Choosing the split dimension and value
+        dimension, split_value = self._choose_split(node)
+        left_data, right_data = [], []
 
+        for datum in node.data:
+            if datum.coords[dimension] < split_value:
+                left_data.append(datum)
+            else:
+                right_data.append(datum)
+
+        # Creating new nodes
+        left_child = NodeLeaf(left_data) if left_data else None
+        right_child = NodeLeaf(right_data) if right_data else None
+
+        return NodeInternal(dimension, split_value, left_child, right_child)
+
+    def _choose_split(self, node):
+        max_spread = -1
+        split_dimension = -1
         for dim in range(self.k):
-            coords = [datum.coords[dim] for datum in leaf.data]
-            min_val, max_val = min(coords), max(coords)
+            values = [datum.coords[dim] for datum in node.data]
+            min_val, max_val = min(values), max(values)
             spread = max_val - min_val
             if spread > max_spread:
                 max_spread = spread
-                split_dim = dim
+                split_dimension = dim
 
-        # Ensure we are sorting and calculating the median for the correct dimension
-        sorted_coords = sorted([datum.coords[split_dim] for datum in leaf.data])
-        median_index = len(sorted_coords) // 2
-        if len(sorted_coords) % 2 == 0:
-            split_value = (sorted_coords[median_index - 1] + sorted_coords[median_index]) / 2
+        # Sort the data points based on the chosen dimension
+        node.data.sort(key=lambda datum: datum.coords[split_dimension])
+
+        # Find the median value and explicitly cast it to float
+        median_index = len(node.data) // 2
+        if len(node.data) % 2 == 0:
+            split_value = float((node.data[median_index - 1].coords[split_dimension] + node.data[median_index].coords[split_dimension]) / 2)
         else:
-            split_value = sorted_coords[median_index]
+            split_value = float(node.data[median_index].coords[split_dimension])
 
-        return split_dim, split_value
+        return (split_dimension, split_value)
 
-
-    def _split_leaf(self, leaf, parent, depth):
-        dim, split_value = self._find_split_dimension(leaf)
-
-        # Assign points to the left or right child based on the split value
-        left_data = [d for d in leaf.data if d.coords[dim] <= split_value]
-        right_data = [d for d in leaf.data if d.coords[dim] > split_value]
-
-        left_child = NodeLeaf(left_data)
-        right_child = NodeLeaf(right_data)
-
-        new_internal_node = NodeInternal(dim, split_value, left_child, right_child)
-        if parent is None:
-            self.root = new_internal_node
-        else:
-            if parent.leftchild == leaf:
-                parent.leftchild = new_internal_node
-            else:
-                parent.rightchild = new_internal_node
-
-        # Recursive splitting for child nodes exceeding the threshold
-        if len(left_child.data) > self.m:
-            self._split_leaf(left_child, new_internal_node, depth + 1)
-        if len(right_child.data) > self.m:
-            self._split_leaf(right_child, new_internal_node, depth + 1)
-
-
-    
+        
     def delete(self, point: tuple[int]):
         if self.root is not None:
-            self.root = self._delete_recursive(self.root, point, 0)
+            self.root, _ = self._delete(self.root, point, 0)
 
-    def _delete_recursive(self, node, point, depth):
-        if node is None:
-            return None
-
+    def _delete(self, node, point, depth):
         if isinstance(node, NodeLeaf):
-            # Remove the point from the leaf node
-            node.data = [d for d in node.data if d.coords != point]
-            # If the leaf is empty, return None to remove the leaf
-            return None if not node.data else node
-        else:
-            # Determine the dimension to compare based on depth
-            dim = depth % self.k
+            node.data = [datum for datum in node.data if datum.coords != point]
+            if len(node.data) == 0:
+                return None, True  # Node is empty, should be removed
+            return node, False  # Node is not empty, no need to recalculate split
 
-            # Check which subtree the point belongs to
-            if point[dim] < node.splitvalue:
-                node.leftchild = self._delete_recursive(node.leftchild, point, depth + 1)
+        if isinstance(node, NodeInternal):
+            if point[node.splitindex] < node.splitvalue:
+                node.leftchild, child_altered = self._delete(node.leftchild, point, depth + 1)
             else:
-                node.rightchild = self._delete_recursive(node.rightchild, point, depth + 1)
+                node.rightchild, child_altered = self._delete(node.rightchild, point, depth + 1)
 
-            # If one of the children is now None, replace node with the other child
-            if node.leftchild is None:
-                return node.rightchild
-            elif node.rightchild is None:
-                return node.leftchild
+            if child_altered:
+                node = self._handle_underpopulated(node)
+                if node and isinstance(node, NodeInternal):
+                    node.splitindex, node.splitvalue = self._choose_split(node)
+                return node, True  # Indicate that the parent might need to update its split
 
-            return node
+        return node, False
+    
+    
+    def _handle_underpopulated(self, node):
+        if isinstance(node, NodeInternal):
+            # Check if either child is None (empty)
+            if node.leftchild is None or node.rightchild is None:
+                surviving_child = node.leftchild if node.leftchild is not None else node.rightchild
+                # Replace internal node with its surviving child if it's a leaf
+                if isinstance(surviving_child, NodeLeaf):
+                    return surviving_child
+                # If surviving child is internal, it's already handled
+            else:
+                # If both children are present and underpopulated, merge them
+                if self._is_underpopulated(node.leftchild) and self._is_underpopulated(node.rightchild):
+                    return self._merge_children(node.leftchild, node.rightchild)
         
+        return node
+
+    def _is_underpopulated(self, node):
+        # Check if a node is underpopulated, defined here as having fewer points than half of max capacity
+        return isinstance(node, NodeLeaf) and len(node.data) < self.m / 2
+
+    def _merge_children(self, left_child, right_child):
+        # Merge the data of two leaf nodes into a new leaf node
+        merged_data = left_child.data + right_child.data
+        return NodeLeaf(merged_data)
+            
         
     def knn(self, k: int, point: tuple[int]) -> str:
         self.leaves_checked = 0
@@ -190,7 +192,8 @@ class KDtree():
         while not self.knn_list.empty():
             knn_list.append(self.knn_list.get()[1].to_json())
 
-        return json.dumps({"leaves_checked": self.leaves_checked, "points": knn_list}, indent=2)
+        # Update the key to "leaveschecked" to match the expected format
+        return json.dumps({"leaveschecked": self.leaves_checked, "points": knn_list}, indent=2)
 
     def _knn_recursive(self, node, point, k, depth):
         if node is None:
@@ -247,4 +250,3 @@ class KDtree():
         # If the distance to the bounding box is less than the distance to the farthest neighbor,
         # then we need to check this subtree
         return dist_squared < farthest_dist_squared
-    

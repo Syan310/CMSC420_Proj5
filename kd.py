@@ -207,30 +207,43 @@ class KDtree():
             return
 
         if isinstance(node, NodeLeaf):
-            self.leaves_checked += 1
+            # Check each point in the leaf node
             for datum in node.data:
                 dist = self._distance(datum.coords, point)
-                if self.knn_list.qsize() < k or dist < self.knn_list.queue[0][0]:
-                    if self.knn_list.qsize() == k:
-                        self.knn_list.get()
-                    self.knn_list.put((dist, datum))
+                if len(self.knn_list.queue) < k or dist < self.knn_list.queue[0][0]:
+                    if len(self.knn_list.queue) == k:
+                        self.knn_list.get()  # Remove the farthest point if list is full
+                    self.knn_list.put((dist, datum))  # Add this point
+            self.leaves_checked += 1
         else:
-            # Determine which subtree is closer
-            dim = depth % len(point)
+            # Determine which subtree is nearer based on the split value
+            dim = depth % self.k  # Split dimension
             if point[dim] < node.splitvalue:
                 nearer_node, farther_node = node.leftchild, node.rightchild
             else:
                 nearer_node, farther_node = node.rightchild, node.leftchild
-            
-            dist_to_split = abs(point[dim] - node.splitvalue)
 
             # Search the nearer subtree first
             self._knn_recursive(nearer_node, point, k, depth + 1)
 
             # Check if we need to search the farther subtree
-            if len(self.knn_list.queue) < k or (self.knn_list.queue[0][0] ** 2) > dist_to_split ** 2:
+            if self._should_search_farther_subtree(point, node, k, dim):
                 self._knn_recursive(farther_node, point, k, depth + 1)
                 
+
+    def _should_search_farther_subtree(self, point, node, k, dim):
+        # Calculate squared distance to the split plane
+        dist_to_split_squared = (point[dim] - node.splitvalue) ** 2
+
+        # If k neighbors have not been found yet, always search the farther subtree
+        if len(self.knn_list.queue) < k:
+            return True
+
+        # Compare with the squared distance of the farthest point in the knn list
+        farthest_dist_squared = self.knn_list.queue[0][0] ** 2
+        return dist_to_split_squared < farthest_dist_squared
+                
+
                 
     def _distance(self, coords1, coords2):
         return sum((c1 - c2) ** 2 for c1, c2 in zip(coords1, coords2)) ** 0.5

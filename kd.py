@@ -1,6 +1,7 @@
 from __future__ import annotations
 import json
 import math
+from queue import PriorityQueue
 from typing import List
 
 # Datum class.
@@ -65,55 +66,180 @@ class KDtree():
         else:
             dict_repr = _to_dict(self.root)
         return json.dumps(dict_repr,indent=2)
-    
+
+    # Insert the Datum with the given code and coords into the tree.
+    # The Datum with the given coords is guaranteed to not be in the tree.
     
     def insert(self, point: tuple[int], code: str):
-        def _insert_recursive(node, depth):
-            if node is None:
-                return NodeLeaf([Datum(point, code)])
+        # Create a Datum object from the point and code
+        datum = Datum(point, code)
 
-            idx = depth % self.k
-            if point[idx] < (node.splitvalue if node.splitvalue is not None else float('inf')):
-                node.leftchild = _insert_recursive(node.leftchild, depth + 1)
+        # If the tree is empty, create a new leaf node as the root
+        if self.root is None:
+            self.root = NodeLeaf([datum])
+        else:
+            # Start the insertion process
+            self._insert_recursive(self.root, None, datum, 0)
+
+    def _insert_recursive(self, node, parent, datum, depth):
+        if isinstance(node, NodeLeaf):
+            # Add datum to the leaf node
+            node.data.append(datum)
+
+            # Check if the leaf node needs to be split
+            if len(node.data) > self.m:
+                self._split_leaf(node, parent, depth)
+        else:
+            # Determine the dimension to compare based on depth
+            dim = depth % self.k
+
+            # Decide whether to go left or right
+            if datum.coords[dim] < node.splitvalue:
+                self._insert_recursive(node.leftchild, node, datum, depth + 1)
             else:
-                node.rightchild = _insert_recursive(node.rightchild, depth + 1)
-            return node
+                self._insert_recursive(node.rightchild, node, datum, depth + 1)
 
-        self.root = _insert_recursive(self.root, 0)
+    def _find_split_dimension(self, leaf):
+        max_spread = -float('inf')
+        split_dim = 0
 
+        for dim in range(self.k):
+            coords = [datum.coords[dim] for datum in leaf.data]
+            min_val, max_val = min(coords), max(coords)
+            spread = max_val - min_val
+            if spread > max_spread:
+                max_spread = spread
+                split_dim = dim
 
+        # Calculate the median value as the split value
+        sorted_coords = sorted(coords)
+        n = len(sorted_coords)
+        split_value = sorted_coords[n // 2] if n % 2 == 1 else (sorted_coords[n // 2 - 1] + sorted_coords[n // 2]) / 2
+
+        return split_dim, split_value
+
+    def _split_leaf(self, leaf, parent, depth):
+        dim, split_value = self._find_split_dimension(leaf)
+
+        # Split the data based on the split value and dimension
+        left_data = [d for d in leaf.data if d.coords[dim] < split_value]
+        right_data = [d for d in leaf.data if d.coords[dim] >= split_value]
+
+        # Ensure a balanced distribution for ties at the median
+        if len(left_data) == 0 or len(right_data) == 0:
+            left_data, right_data = leaf.data[:len(leaf.data)//2], leaf.data[len(leaf.data)//2:]
+
+        # Create new leaf nodes
+        left_child = NodeLeaf(left_data)
+        right_child = NodeLeaf(right_data)
+
+        # Replace the current leaf with a new internal node
+        new_internal_node = NodeInternal(dim, split_value, left_child, right_child)
+        if parent is None:
+            self.root = new_internal_node
+        else:
+            if parent.leftchild == leaf:
+                parent.leftchild = new_internal_node
+            else:
+                parent.rightchild = new_internal_node
+
+    
     def delete(self, point: tuple[int]):
-        def _delete_recursive(node, depth):
-            if node is None:
-                return None
+        if self.root is not None:
+            self.root = self._delete_recursive(self.root, point, 0)
 
-            idx = depth % self.k
-            if node.data and any(datum.coords == point for datum in node.data):
-                # If it's a leaf node, remove the datum
-                node.data = [datum for datum in node.data if datum.coords != point]
-                return node if node.data else None
-            elif point[idx] < node.splitvalue:
-                node.leftchild = _delete_recursive(node.leftchild, depth + 1)
+    def _delete_recursive(self, node, point, depth):
+        if node is None:
+            return None
+
+        if isinstance(node, NodeLeaf):
+            # Remove the point from the leaf node
+            node.data = [d for d in node.data if d.coords != point]
+            # If the leaf is empty, return None to remove the leaf
+            return None if not node.data else node
+        else:
+            # Determine the dimension to compare based on depth
+            dim = depth % self.k
+
+            # Check which subtree the point belongs to
+            if point[dim] < node.splitvalue:
+                node.leftchild = self._delete_recursive(node.leftchild, point, depth + 1)
             else:
-                node.rightchild = _delete_recursive(node.rightchild, depth + 1)
+                node.rightchild = self._delete_recursive(node.rightchild, point, depth + 1)
+
+            # If one of the children is now None, replace node with the other child
+            if node.leftchild is None:
+                return node.rightchild
+            elif node.rightchild is None:
+                return node.leftchild
+
             return node
-
-        self.root = _delete_recursive(self.root, 0)
-
-
+        
+        
     def knn(self, k: int, point: tuple[int]) -> str:
-        def _knn_recursive(node, depth):
-            if node is None:
-                return []
-            
-            idx = depth % self.k
-            next_branch = node.leftchild if point[idx] < node.splitvalue else node.rightchild
-            opposite_branch = node.rightchild if next_branch is node.leftchild else node.leftchild
+        self.leaves_checked = 0
+        self.knn_list = PriorityQueue()
+        self._knn_recursive(self.root, point, k, 0)
+        knn_list = []
 
-            best = _knn_recursive(next_branch, depth + 1)
-            if len(best) < k or abs(point[idx] - node.splitvalue) < self._distance(point, best[-1].coords):
-                best.extend(_knn_recursive(opposite_branch, depth + 1))
-            
-            return sorted(best, key=lambda datum: self._distance(point, datum.coords))[:k]
+        while not self.knn_list.empty():
+            knn_list.append(self.knn_list.get()[1].to_json())
 
-        return json.dumps({"leaveschecked": 0, "points": [datum.to_json() for datum in _knn_recursive(self.root, 0)]}, indent=2)
+        return json.dumps({"leaves_checked": self.leaves_checked, "points": knn_list}, indent=2)
+
+    def _knn_recursive(self, node, point, k, depth):
+        if node is None:
+            return
+
+        if isinstance(node, NodeLeaf):
+            self.leaves_checked += 1
+            for datum in node.data:
+                dist = self._distance(datum.coords, point)
+                if self.knn_list.qsize() < k or dist < self.knn_list.queue[0][0]:
+                    if self.knn_list.qsize() == k:
+                        self.knn_list.get()
+                    self.knn_list.put((dist, datum))
+        else:
+            # Determine which subtree is closer
+            dim = depth % len(point)
+            if point[dim] < node.splitvalue:
+                nearer_node, farther_node = node.leftchild, node.rightchild
+            else:
+                nearer_node, farther_node = node.rightchild, node.leftchild
+
+            # Search the nearer subtree first
+            self._knn_recursive(nearer_node, point, k, depth + 1)
+
+            # Check if we need to search the farther subtree
+            if self.knn_list.qsize() < k or self._closer_to_bounding_box(point, node, dim):
+                self._knn_recursive(farther_node, point, k, depth + 1)
+
+    def _distance(self, coords1, coords2):
+        return sum((c1 - c2) ** 2 for c1, c2 in zip(coords1, coords2)) ** 0.5
+    
+    def _closer_to_bounding_box(self, point, node, dim):
+        # The split value at the current dimension forms one 'side' of the bounding box
+        split = node.splitvalue
+
+        # Calculate the distance from the point to this 'side' of the bounding box
+        # If the point's coordinate in the split dimension is less than the split,
+        # the closest point on the bounding box is at the split value.
+        # Otherwise, it's on the other side of the split.
+        point_coord = point[dim]
+        if point_coord < split:
+            closest_point_coord = split
+        else:
+            closest_point_coord = split
+
+        # Calculate the squared distance for this dimension
+        # We can compare squared distances to avoid taking square roots, which is more efficient
+        dist_squared = (point_coord - closest_point_coord) ** 2
+
+        # Get the squared distance of the farthest point in the current k-nearest neighbors
+        # Since the queue is a max heap based on distance, the farthest point is at the root
+        farthest_dist_squared = self.knn_list.queue[0][0] ** 2
+
+        # If the distance to the bounding box is less than the distance to the farthest neighbor,
+        # then we need to check this subtree
+        return dist_squared < farthest_dist_squared
+    

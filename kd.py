@@ -37,7 +37,36 @@ class NodeLeaf():
 
 # KD tree class.
 class KDtree():
+    def  __init__(self,
+                  k    : int,
+                  m    : int,
+                  root = None):
+        self.k    = k
+        self.m    = m
+        self.root = root
 
+    # For the tree rooted at root, dump the tree to stringified JSON object and return.
+    # DO NOT MODIFY.
+    def dump(self) -> str:
+        def _to_dict(node) -> dict:
+            if isinstance(node,NodeLeaf):
+                return {
+                    "p": str([{'coords': datum.coords,'code': datum.code} for datum in node.data])
+                }
+            else:
+                return {
+                    "splitindex": node.splitindex,
+                    "splitvalue": node.splitvalue,
+                    "l": (_to_dict(node.leftchild)  if node.leftchild  is not None else None),
+                    "r": (_to_dict(node.rightchild) if node.rightchild is not None else None)
+                }
+        if self.root is None:
+            dict_repr = {}
+        else:
+            dict_repr = _to_dict(self.root)
+        return json.dumps(dict_repr,indent=2)
+    
+    
     def insert(self, point: tuple[int], code: str):
         def _insert_recursive(node, depth):
             if node is None:

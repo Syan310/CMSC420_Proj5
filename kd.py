@@ -111,10 +111,13 @@ class KDtree():
                 max_spread = spread
                 split_dim = dim
 
-        # Calculate the median value as the split value
+        # Correctly calculating the median
         sorted_coords = sorted(coords)
-        n = len(sorted_coords)
-        split_value = sorted_coords[n // 2] if n % 2 == 1 else (sorted_coords[n // 2 - 1] + sorted_coords[n // 2]) / 2
+        median_index = len(sorted_coords) // 2
+        if len(sorted_coords) % 2 == 0:
+            split_value = (sorted_coords[median_index - 1] + sorted_coords[median_index]) / 2
+        else:
+            split_value = sorted_coords[median_index]
 
         return split_dim, split_value
 
@@ -142,6 +145,7 @@ class KDtree():
                 parent.leftchild = new_internal_node
             else:
                 parent.rightchild = new_internal_node
+
 
     
     def delete(self, point: tuple[int]):

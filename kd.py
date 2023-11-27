@@ -111,7 +111,8 @@ class KDtree():
                 max_spread = spread
                 split_dim = dim
 
-        sorted_coords = sorted(coords)
+        # Ensure we are sorting and calculating the median for the correct dimension
+        sorted_coords = sorted([datum.coords[split_dim] for datum in leaf.data])
         median_index = len(sorted_coords) // 2
         if len(sorted_coords) % 2 == 0:
             split_value = (sorted_coords[median_index - 1] + sorted_coords[median_index]) / 2

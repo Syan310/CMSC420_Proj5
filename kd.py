@@ -210,66 +210,34 @@ class KDtree():
             # Check each point in the leaf node
             for datum in node.data:
                 dist = self._distance(datum.coords, point)
-                if len(self.knn_list.queue) < k or dist < self.knn_list.queue[0][0]:
-                    if len(self.knn_list.queue) == k:
-                        self.knn_list.get()  # Remove the farthest point if list is full
-                    self.knn_list.put((dist, datum))  # Add this point
+                if len(self.knn_list.queue) < k:
+                    self.knn_list.put((-dist, datum))  # Use negative distance for max heap
+                elif dist < -self.knn_list.queue[0][0]:  # Compare with negative distance
+                    self.knn_list.get()  # Remove the farthest point
+                    self.knn_list.put((-dist, datum))  # Add this point
             self.leaves_checked += 1
         else:
-            # Determine which subtree is nearer based on the split value
-            dim = depth % self.k  # Split dimension
-            if point[dim] < node.splitvalue:
-                nearer_node, farther_node = node.leftchild, node.rightchild
-            else:
-                nearer_node, farther_node = node.rightchild, node.leftchild
+            # Determine which subtree is nearer
+            dim = depth % self.k
+            nearer_node, farther_node = (node.leftchild, node.rightchild) if point[dim] < node.splitvalue else (node.rightchild, node.leftchild)
 
             # Search the nearer subtree first
             self._knn_recursive(nearer_node, point, k, depth + 1)
 
             # Check if we need to search the farther subtree
-            if self._should_search_farther_subtree(point, node, k, dim):
+            if len(self.knn_list.queue) < k or self._closer_to_bounding_box(point, node, dim):
                 self._knn_recursive(farther_node, point, k, depth + 1)
-                
 
-    def _should_search_farther_subtree(self, point, node, k, dim):
-        # Calculate squared distance to the split plane
-        dist_to_split_squared = (point[dim] - node.splitvalue) ** 2
-
-        # If k neighbors have not been found yet, always search the farther subtree
-        if len(self.knn_list.queue) < k:
-            return True
-
-        # Compare with the squared distance of the farthest point in the knn list
-        farthest_dist_squared = self.knn_list.queue[0][0] ** 2
-        return dist_to_split_squared < farthest_dist_squared
-                
 
                 
     def _distance(self, coords1, coords2):
         return sum((c1 - c2) ** 2 for c1, c2 in zip(coords1, coords2)) ** 0.5
     
     def _closer_to_bounding_box(self, point, node, dim):
-        # The split value at the current dimension forms one 'side' of the bounding box
-        split = node.splitvalue
-
-        # Calculate the distance from the point to this 'side' of the bounding box
-        # If the point's coordinate in the split dimension is less than the split,
-        # the closest point on the bounding box is at the split value.
-        # Otherwise, it's on the other side of the split.
-        point_coord = point[dim]
-        if point_coord < split:
-            closest_point_coord = split
-        else:
-            closest_point_coord = split
-
         # Calculate the squared distance for this dimension
-        # We can compare squared distances to avoid taking square roots, which is more efficient
-        dist_squared = (point_coord - closest_point_coord) ** 2
+        dist_squared = (point[dim] - node.splitvalue) ** 2
 
         # Get the squared distance of the farthest point in the current k-nearest neighbors
-        # Since the queue is a max heap based on distance, the farthest point is at the root
-        farthest_dist_squared = self.knn_list.queue[0][0] ** 2
+        farthest_dist_squared = -self.knn_list.queue[0][0] ** 2  # Negative because the queue stores negative distances
 
-        # If the distance to the bounding box is less than the distance to the farthest neighbor,
-        # then we need to check this subtree
         return dist_squared < farthest_dist_squared

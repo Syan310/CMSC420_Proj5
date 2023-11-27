@@ -125,7 +125,7 @@ class KDtree():
     def _split_leaf(self, leaf, parent, depth):
         dim, split_value = self._find_split_dimension(leaf)
 
-        # Assign points to the left child if they are less than or equal to the split value
+        # Assign points to the left or right child based on the split value
         left_data = [d for d in leaf.data if d.coords[dim] <= split_value]
         right_data = [d for d in leaf.data if d.coords[dim] > split_value]
 
@@ -141,13 +141,11 @@ class KDtree():
             else:
                 parent.rightchild = new_internal_node
 
-        # Check if further splitting is needed for each child
+        # Recursive splitting for child nodes exceeding the threshold
         if len(left_child.data) > self.m:
             self._split_leaf(left_child, new_internal_node, depth + 1)
         if len(right_child.data) > self.m:
             self._split_leaf(right_child, new_internal_node, depth + 1)
-
-
 
 
     

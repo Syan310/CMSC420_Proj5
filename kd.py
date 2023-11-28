@@ -47,7 +47,7 @@ class KDtree():
         self.k    = k
         self.m    = m
         self.root = root
-
+       
     # For the tree rooted at root, dump the tree to stringified JSON object and return.
     # DO NOT MODIFY.
     def dump(self) -> str:
@@ -68,6 +68,8 @@ class KDtree():
         else:
             dict_repr = _to_dict(self.root)
         return json.dumps(dict_repr,indent=2)
+
+
 
     # Insert the Datum with the given code and coords into the tree.
     # The Datum with the given coords is guaranteed to not be in the tree.
@@ -197,7 +199,7 @@ class KDtree():
         knn_list = []
         self._knn_search(self.root, point, k, knn_list, 0, leaves_checked)
 
-        # Construct result list
+        # Sort result list by distance and then code
         result = sorted(knn_list, key=lambda x: (x[0], x[1].code))
         return json.dumps({"leaveschecked": leaves_checked[0], "points": [datum.to_json() for _, datum in result]}, indent=2)
 
@@ -212,7 +214,7 @@ class KDtree():
                 if len(knn_list) < k or (distance, datum) < max(knn_list):
                     if len(knn_list) == k:
                         knn_list.remove(max(knn_list))
-                    knn_list.append((distance, datum))
+                    heapq.heappush(knn_list, (distance, datum))
             return
 
         # Determine which subtree to explore first
@@ -224,9 +226,9 @@ class KDtree():
 
         # Explore the farther subtree if needed
         split_distance = abs(target[dim] - node.splitvalue)
-        max_distance = max(knn_list)[0] if knn_list else float('inf')
-        if len(knn_list) < k or split_distance < max_distance:
+        if len(knn_list) < k or split_distance < max(knn_list)[0]:
             self._knn_search(farther, target, k, knn_list, depth + 1, leaves_checked)
+
 
 
 

@@ -1,4 +1,6 @@
+
 from __future__ import annotations
+import heapq
 import json
 import math
 from queue import PriorityQueue
@@ -189,55 +191,49 @@ class KDtree():
         merged_data = left_child.data + right_child.data
         return NodeLeaf(merged_data)
             
-        
     def knn(self, k: int, point: tuple[int]) -> str:
-        self.leaves_checked = 0
-        self.knn_list = PriorityQueue()  # Min heap for actual distances
-        self._knn_recursive(self.root, point, k, 0)
-        knn_list = []
+        leaves_checked = 0
+        knn_list = PriorityQueue()
+        self._knn_search(self.root, point, k, knn_list, 0)
+        leaves_checked = knn_list.qsize()
 
-        while not self.knn_list.empty():
-            _, datum = self.knn_list.get()
-            knn_list.append(datum.to_json())
+        # Constructing the result list from the priority queue
+        result = []
+        while not knn_list.empty():
+            result.append(knn_list.get()[1])
 
-        return json.dumps({"leaveschecked": self.leaves_checked, "points": knn_list}, indent=2)
+        return json.dumps({"leaveschecked": leaves_checked, "points": [datum.to_json() for datum in reversed(result)]}, indent=2)
 
-    def _knn_recursive(self, node, point, k, depth):
+    def _knn_search(self, node, target, k, knn_list, depth):
         if node is None:
             return
 
         if isinstance(node, NodeLeaf):
             for datum in node.data:
-                dist_squared = self._distance(datum.coords, point)
-                if len(self.knn_list.queue) < k:
-                    self.knn_list.put((dist_squared, datum))
-                elif dist_squared < self.knn_list.queue[0][0]:
-                    if len(self.knn_list.queue) == k:
-                        self.knn_list.get()  # Remove the farthest point
-                    self.knn_list.put((dist_squared, datum))
-            self.leaves_checked += 1
-        else:
-            # Determine which subtree is nearer
-            dim = depth % self.k
-            nearer_node, farther_node = (node.leftchild, node.rightchild) if point[dim] < node.splitvalue else (node.rightchild, node.leftchild)
+                distance = self._euclidean_distance(datum.coords, target)
+                if knn_list.qsize() < k:
+                    knn_list.put((-distance, datum))
+                else:
+                    if -distance > knn_list.queue[0][0]:  # Compare with the largest distance in the queue
+                        knn_list.get()
+                        knn_list.put((-distance, datum))
+            return
 
-            # Search the nearer subtree first
-            self._knn_recursive(nearer_node, point, k, depth + 1)
+        # Decide which subtree to explore first
+        closer, farther = (node.leftchild, node.rightchild) if target[node.splitindex] < node.splitvalue else (node.rightchild, node.leftchild)
 
-            # Check if we need to search the farther subtree
-            if len(self.knn_list.queue) < k or self._closer_to_bounding_box(point, node, dim):
-                self._knn_recursive(farther_node, point, k, depth + 1)
+        self._knn_search(closer, target, k, knn_list, depth + 1)
 
+        # Check if we need to explore the farther subtree
+        if self._need_to_explore_further(node, target, k, knn_list):
+            self._knn_search(farther, target, k, knn_list, depth + 1)
 
-                
-    def _distance(self, coords1, coords2):
-        return sum((c1 - c2) ** 2 for c1, c2 in zip(coords1, coords2))  # Return squared distance
-    
-    def _closer_to_bounding_box(self, point, node, dim):
-        # Calculate the squared distance for this dimension
-        dist_squared = (point[dim] - node.splitvalue) ** 2
+    def _need_to_explore_further(self, node, target, k, knn_list):
+        if knn_list.qsize() < k:
+            return True
 
-        # Get the squared distance of the farthest point in the current k-nearest neighbors
-        farthest_dist_squared = -self.knn_list.queue[0][0] ** 2  # Negative because the queue stores negative distances
+        split_axis_distance = abs(target[node.splitindex] - node.splitvalue)
+        return -split_axis_distance > knn_list.queue[0][0]
 
-        return dist_squared < farthest_dist_squared
+    def _euclidean_distance(self, point1, point2):
+        return math.sqrt(sum((p1 - p2) ** 2 for p1, p2 in zip(point1, point2)))

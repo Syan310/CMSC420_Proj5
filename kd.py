@@ -222,8 +222,10 @@ class KDtree():
         # Visit the closer subtree
         self._knn_search(closer, target, k, knn_list, depth + 1, leaves_checked)
 
-        # Decide whether to visit the farther subtree
-        if len(knn_list) < k or abs(target[dim] - node.splitvalue) < max(knn_list)[0]:
+        # Explore the farther subtree if needed
+        split_distance = abs(target[dim] - node.splitvalue)
+        max_distance = max(knn_list)[0] if knn_list else float('inf')
+        if len(knn_list) < k or split_distance < max_distance:
             self._knn_search(farther, target, k, knn_list, depth + 1, leaves_checked)
 
 

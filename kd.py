@@ -195,39 +195,38 @@ class KDtree():
             
 
     def knn(self, k: int, point: tuple[int]) -> str:
-        leaves_checked = [0]
-        knn_list = []
-        self._knn_search(self.root, point, k, knn_list, 0, leaves_checked)
+        leaves_checked = 0
+        knn_heap = []  # Using a min-heap to store nearest neighbors
 
-        # Sort result list by distance and then code
-        result = sorted(knn_list, key=lambda x: (x[0], x[1].code))
-        return json.dumps({"leaveschecked": leaves_checked[0], "points": [datum.to_json() for _, datum in result]}, indent=2)
+        def _knn_search(node, depth):
+            nonlocal leaves_checked
+            if node is None:
+                return
 
-    def _knn_search(self, node, target, k, knn_list, depth, leaves_checked):
-        if node is None:
-            return
+            if isinstance(node, NodeLeaf):
+                leaves_checked += 1
+                for datum in node.data:
+                    distance = self._euclidean_distance(datum.coords, point)
+                    if len(knn_heap) < k:
+                        heapq.heappush(knn_heap, (-distance, datum))
+                    else:
+                        heapq.heappushpop(knn_heap, (-distance, datum))
 
-        if isinstance(node, NodeLeaf):
-            leaves_checked[0] += 1
-            for datum in node.data:
-                distance = self._euclidean_distance(datum.coords, target)
-                if len(knn_list) < k or (distance, datum) < max(knn_list):
-                    if len(knn_list) == k:
-                        knn_list.remove(max(knn_list))
-                    heapq.heappush(knn_list, (distance, datum))
-            return
+            else:  # NodeInternal
+                axis = depth % self.k
+                next_node, other_node = (node.leftchild, node.rightchild) if point[axis] < node.splitvalue else (node.rightchild, node.leftchild)
+                
+                _knn_search(next_node, depth + 1)
 
-        # Determine which subtree to explore first
-        dim = depth % self.k
-        closer, farther = (node.leftchild, node.rightchild) if target[dim] < node.splitvalue else (node.rightchild, node.leftchild)
+                # Check if we need to explore the other subtree
+                if len(knn_heap) < k or abs(point[axis] - node.splitvalue) < -knn_heap[0][0]:
+                    _knn_search(other_node, depth + 1)
 
-        # Visit the closer subtree
-        self._knn_search(closer, target, k, knn_list, depth + 1, leaves_checked)
+        _knn_search(self.root, 0)
 
-        # Explore the farther subtree if needed
-        split_distance = abs(target[dim] - node.splitvalue)
-        if len(knn_list) < k or split_distance < max(knn_list)[0]:
-            self._knn_search(farther, target, k, knn_list, depth + 1, leaves_checked)
+        # Sort results by distance and code
+        result = sorted(((-dist, datum) for dist, datum in knn_heap), key=lambda x: (-x[0], x[1].code))
+        return json.dumps({"leaveschecked": leaves_checked, "points": [datum.to_json() for _, datum in result]}, indent=2)
 
 
 

@@ -208,25 +208,26 @@ class KDtree():
             return
 
         if isinstance(node, NodeLeaf):
-            leaves_checked[0] += 1  # Increment the first element of the list
+            leaves_checked[0] += 1
             for datum in node.data:
                 distance = self._euclidean_distance(datum.coords, target)
-                if knn_list.qsize() < k:
-                    knn_list.put((-distance, datum))
-                else:
-                    if -distance > knn_list.queue[0][0]:  # Compare with the largest distance in the queue
-                        knn_list.get()
-                        knn_list.put((-distance, datum))
+                if knn_list.qsize() < k or -distance > knn_list.queue[0][0]:
+                    heapq.heappushpop(knn_list, (-distance, datum)) if knn_list.qsize() == k else heapq.heappush(knn_list, (-distance, datum))
             return
 
         # Decide which subtree to explore first
-        closer, farther = (node.leftchild, node.rightchild) if target[node.splitindex] < node.splitvalue else (node.rightchild, node.leftchild)
+        dim = depth % self.k
+        if target[dim] < node.splitvalue:
+            closer, farther = node.leftchild, node.rightchild
+        else:
+            closer, farther = node.rightchild, node.leftchild
 
         self._knn_search(closer, target, k, knn_list, depth + 1, leaves_checked)
 
-        # Check if we need to explore the farther subtree
-        if self._need_to_explore_further(node, target, k, knn_list):
+        # Explore the farther subtree if needed
+        if len(knn_list) < k or abs(target[dim] - node.splitvalue) < -knn_list[0][0]:
             self._knn_search(farther, target, k, knn_list, depth + 1, leaves_checked)
+
 
 
 

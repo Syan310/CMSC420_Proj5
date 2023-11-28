@@ -194,44 +194,49 @@ class KDtree():
         return NodeLeaf(merged_data)
             
 
-    # ... [rest of your KDtree class]
 
-    def knn(self, k, target):
-        # Start with an empty list of k nearest neighbors
-        nearest_neighbors = []
-        self._knn_recursive(self.root, target, k, nearest_neighbors, 0)
-        nearest_neighbors.sort(key=lambda x: (x[0], x[1].code))  # Sort by distance and code
-        return [neighbor[1].to_json() for neighbor in nearest_neighbors]
+    def knn(self, k: int, point: tuple[int]) -> str:
+        leaves_checked = 0
+        knn_heap = []  # Using a max-heap to store nearest neighbors
+        to_visit = PriorityQueue()
+        to_visit.put((0, self.root, 0))  # Starting with the root node
 
-    def _knn_recursive(self, node, target, k, nearest_neighbors, depth):
-        if node is None:
-            return
+        while not to_visit.empty():
+            dist, node, depth = to_visit.get()
+            if isinstance(node, NodeLeaf):
+                leaves_checked += 1
+                for datum in node.data:
+                    distance = self._euclidean_distance_squared(datum.coords, point)
+                    if len(knn_heap) < k:
+                        heapq.heappush(knn_heap, (-distance, datum))
+                    elif distance < -knn_heap[0][0]:
+                        heapq.heappushpop(knn_heap, (-distance, datum))
+            else:  # NodeInternal
+                axis = depth % self.k
+                # Choose which side to visit next based on which side of the split value the point lies
+                if point[axis] < node.splitvalue:
+                    next_node, other_node = node.leftchild, node.rightchild
+                else:
+                    next_node, other_node = node.rightchild, node.leftchild
 
-        if isinstance(node, NodeLeaf):
-            # Check and update nearest neighbors with points in the leaf node
-            for point in node.data:
-                dist = self._distance(point.coords, target)
-                if len(nearest_neighbors) < k or dist < nearest_neighbors[-1][0]:
-                    heapq.heappush(nearest_neighbors, (dist, point))
-                    if len(nearest_neighbors) > k:
-                        heapq.heappop(nearest_neighbors)
-            return
+                # Visit the next node
+                to_visit.put((dist, next_node, depth + 1))
 
-        # Determine whether to visit left or right subtree first
-        axis = depth % self.k
-        diff = target[axis] - node.splitvalue
-        first, second = (node.leftchild, node.rightchild) if diff < 0 else (node.rightchild, node.leftchild)
+                # Calculate the minimum squared distance to the splitting plane
+                split_dist = (point[axis] - node.splitvalue) ** 2
+                # Only consider the other node if we don't have k nearest neighbors yet or the splitting plane is closer
+                worst_dist = -knn_heap[0][0] if knn_heap else float('inf')
+                if len(knn_heap) < k or split_dist < worst_dist:
+                    to_visit.put((split_dist, other_node, depth + 1))
 
-        # Visit the subtree that is closer to the target point first
-        self._knn_recursive(first, target, k, nearest_neighbors, depth + 1)
+        # Sort results by distance and code
+        result = sorted(((-dist, datum) for dist, datum in knn_heap), key=lambda x: (-x[0], x[1].code))
+        return json.dumps({"leaveschecked": leaves_checked, "points": [datum.to_json() for _, datum in result]}, indent=2)
 
-        # Check if we should visit the second subtree
-        if len(nearest_neighbors) < k or abs(diff) < nearest_neighbors[-1][0]:
-            self._knn_recursive(second, target, k, nearest_neighbors, depth + 1)
 
-    def _distance(self, point1, point2):
+    def _euclidean_distance_squared(self, point1, point2):
+        # Helper method to calculate squared Euclidean distance between two points
         return sum((p1 - p2) ** 2 for p1, p2 in zip(point1, point2))
-
 
     def _need_to_explore_further(self, node, target, k, knn_list):
         if knn_list.qsize() < k:

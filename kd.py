@@ -194,41 +194,48 @@ class KDtree():
         return NodeLeaf(merged_data)
             
 
+    # ... [rest of your KDtree class]
+
     def knn(self, k: int, point: tuple[int]) -> str:
         leaves_checked = 0
-        knn_heap = []  # Using a min-heap to store nearest neighbors
+        knn_heap = []  # Using a max-heap to store nearest neighbors
+        # Priority queue to store the node to visit next along with minimum possible distance to the bounding box of the node
+        to_visit = PriorityQueue()
+        to_visit.put((0, self.root, 0))  # Starting with the root node
 
-        def _knn_search(node, depth):
-            nonlocal leaves_checked
-            if node is None:
-                return
-
+        while not to_visit.empty():
+            dist, node, depth = to_visit.get()
             if isinstance(node, NodeLeaf):
                 leaves_checked += 1
                 for datum in node.data:
-                    distance = self._euclidean_distance(datum.coords, point)
+                    distance = self._euclidean_distance_squared(datum.coords, point)
                     if len(knn_heap) < k:
                         heapq.heappush(knn_heap, (-distance, datum))
-                    else:
+                    elif distance < -knn_heap[0][0]:
                         heapq.heappushpop(knn_heap, (-distance, datum))
-
             else:  # NodeInternal
                 axis = depth % self.k
-                next_node, other_node = (node.leftchild, node.rightchild) if point[axis] < node.splitvalue else (node.rightchild, node.leftchild)
-                
-                _knn_search(next_node, depth + 1)
+                # Choose which side to visit next based on which side of the split value the point lies
+                if point[axis] < node.splitvalue:
+                    next_node, other_node = node.leftchild, node.rightchild
+                else:
+                    next_node, other_node = node.rightchild, node.leftchild
 
-                # Check if we need to explore the other subtree
-                if len(knn_heap) < k or abs(point[axis] - node.splitvalue) < -knn_heap[0][0]:
-                    _knn_search(other_node, depth + 1)
+                # Visit the next node
+                to_visit.put((dist, next_node, depth + 1))
 
-        _knn_search(self.root, 0)
+                # Calculate the minimum squared distance to the splitting plane
+                split_dist = (point[axis] - node.splitvalue) ** 2
+                # Only consider the other node if we don't have k nearest neighbors yet or the splitting plane is closer
+                if len(knn_heap) < k or split_dist < -knn_heap[0][0]:
+                    to_visit.put((split_dist, other_node, depth + 1))
 
         # Sort results by distance and code
         result = sorted(((-dist, datum) for dist, datum in knn_heap), key=lambda x: (-x[0], x[1].code))
         return json.dumps({"leaveschecked": leaves_checked, "points": [datum.to_json() for _, datum in result]}, indent=2)
 
-
+    def _euclidean_distance_squared(self, point1, point2):
+        return sum((p1 - p2) ** 2 for p1, p2 in zip(point1, point2))
 
 
     def _need_to_explore_further(self, node, target, k, knn_list):

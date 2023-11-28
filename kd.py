@@ -196,47 +196,54 @@ class KDtree():
 
 
     def knn(self, k: int, point: tuple[int]) -> str:
+    # Using a list to store the nearest neighbors sorted by distance and code
+        knn_list = []
         leaves_checked = 0
-        knn_heap = []  # Using a max-heap to store nearest neighbors
         to_visit = PriorityQueue()
-        to_visit.put((0, self.root, 0))  # Starting with the root node
+
+        # Start with the root node; distance to the root node is 0
+        to_visit.put((0, self.root, 0))
 
         while not to_visit.empty():
-            dist, node, depth = to_visit.get()
+            _, node, depth = to_visit.get()
+
             if isinstance(node, NodeLeaf):
                 leaves_checked += 1
                 for datum in node.data:
-                    distance = self._euclidean_distance_squared(datum.coords, point)
-                    if len(knn_heap) < k:
-                        heapq.heappush(knn_heap, (-distance, datum))
-                    elif distance < -knn_heap[0][0]:
-                        heapq.heappushpop(knn_heap, (-distance, datum))
-            else:  # NodeInternal
-                axis = depth % self.k
-                # Choose which side to visit next based on which side of the split value the point lies
-                if point[axis] < node.splitvalue:
-                    next_node, other_node = node.leftchild, node.rightchild
-                else:
-                    next_node, other_node = node.rightchild, node.leftchild
-
-                # Visit the next node
-                to_visit.put((dist, next_node, depth + 1))
-
-                # Calculate the minimum squared distance to the splitting plane
+                    d_squared = self._euclidean_distance_squared(datum.coords, point)
+                    if len(knn_list) < k:
+                        heapq.heappush(knn_list, (-d_squared, datum.code, datum))
+                    else:
+                        # Check if the new point should replace the farthest in the list
+                        furthest_distance, _, _ = knn_list[0]
+                        if d_squared < -furthest_distance or (d_squared == -furthest_distance and datum.code < knn_list[0][1]):
+                            heapq.heappushpop(knn_list, (-d_squared, datum.code, datum))
+            else:
+                axis = node.splitindex
                 split_dist = (point[axis] - node.splitvalue) ** 2
-                # Only consider the other node if we don't have k nearest neighbors yet or the splitting plane is closer
-                worst_dist = -knn_heap[0][0] if knn_heap else float('inf')
-                if len(knn_heap) < k or split_dist < worst_dist:
-                    to_visit.put((split_dist, other_node, depth + 1))
+                closer_node, farther_node = (node.leftchild, node.rightchild) if point[axis] < node.splitvalue else (node.rightchild, node.leftchild)
 
-        # Sort results by distance and code
-        result = sorted(((-dist, datum) for dist, datum in knn_heap), key=lambda x: (-x[0], x[1].code))
-        return json.dumps({"leaveschecked": leaves_checked, "points": [datum.to_json() for _, datum in result]}, indent=2)
+                # Always visit the closer node first
+                to_visit.put((split_dist, closer_node, depth + 1))
 
+                # Only visit the farther node if necessary
+                furthest_distance = -knn_list[0][0] if knn_list else float('inf')
+                if len(knn_list) < k or split_dist < furthest_distance:
+                    to_visit.put((split_dist, farther_node, depth + 1))
+
+        # Sort the knn_list by distance and code
+        knn_list.sort(key=lambda x: (-x[0], x[1]))
+        nearest_neighbors = [(datum.coords, datum.code) for _, _, datum in knn_list]
+
+        return json.dumps({
+            "leaveschecked": leaves_checked,
+            "points": [{"coords": coords, "code": code} for coords, code in nearest_neighbors]
+        }, indent=2)
 
     def _euclidean_distance_squared(self, point1, point2):
         # Helper method to calculate squared Euclidean distance between two points
         return sum((p1 - p2) ** 2 for p1, p2 in zip(point1, point2))
+
 
     def _need_to_explore_further(self, node, target, k, knn_list):
         if knn_list.qsize() < k:
@@ -244,6 +251,3 @@ class KDtree():
 
         split_axis_distance = abs(target[node.splitindex] - node.splitvalue)
         return -split_axis_distance > knn_list.queue[0][0]
-
-    def _euclidean_distance(self, point1, point2):
-        return math.sqrt(sum((p1 - p2) ** 2 for p1, p2 in zip(point1, point2)))

@@ -192,10 +192,9 @@ class KDtree():
         return NodeLeaf(merged_data)
             
     def knn(self, k: int, point: tuple[int]) -> str:
-        leaves_checked = 0
+        leaves_checked = 0  # Initialize leaves checked counter
         knn_list = PriorityQueue()
-        self._knn_search(self.root, point, k, knn_list, 0)
-        leaves_checked = knn_list.qsize()
+        self._knn_search(self.root, point, k, knn_list, 0, leaves_checked)
 
         # Constructing the result list from the priority queue
         result = []
@@ -204,11 +203,12 @@ class KDtree():
 
         return json.dumps({"leaveschecked": leaves_checked, "points": [datum.to_json() for datum in reversed(result)]}, indent=2)
 
-    def _knn_search(self, node, target, k, knn_list, depth):
+    def _knn_search(self, node, target, k, knn_list, depth, leaves_checked):
         if node is None:
             return
 
         if isinstance(node, NodeLeaf):
+            leaves_checked += 1  # Increment leaves checked when a leaf node is visited
             for datum in node.data:
                 distance = self._euclidean_distance(datum.coords, target)
                 if knn_list.qsize() < k:
@@ -222,11 +222,12 @@ class KDtree():
         # Decide which subtree to explore first
         closer, farther = (node.leftchild, node.rightchild) if target[node.splitindex] < node.splitvalue else (node.rightchild, node.leftchild)
 
-        self._knn_search(closer, target, k, knn_list, depth + 1)
+        self._knn_search(closer, target, k, knn_list, depth + 1, leaves_checked)
 
         # Check if we need to explore the farther subtree
         if self._need_to_explore_further(node, target, k, knn_list):
-            self._knn_search(farther, target, k, knn_list, depth + 1)
+            self._knn_search(farther, target, k, knn_list, depth + 1, leaves_checked)
+
 
     def _need_to_explore_further(self, node, target, k, knn_list):
         if knn_list.qsize() < k:

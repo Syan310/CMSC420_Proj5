@@ -194,6 +194,7 @@ class KDtree():
         return NodeLeaf(merged_data)
             
 
+    # ... [rest of your KDtree class]
 
     def knn(self, k: int, point: tuple[int]) -> str:
         leaves_checked = 0
@@ -233,10 +234,9 @@ class KDtree():
         result = sorted(((-dist, datum) for dist, datum in knn_heap), key=lambda x: (-x[0], x[1].code))
         return json.dumps({"leaveschecked": leaves_checked, "points": [datum.to_json() for _, datum in result]}, indent=2)
 
+    
     def _euclidean_distance_squared(self, point1, point2):
-        # Helper method to calculate squared Euclidean distance between two points
         return sum((p1 - p2) ** 2 for p1, p2 in zip(point1, point2))
-
 
 
     def _need_to_explore_further(self, node, target, k, knn_list):

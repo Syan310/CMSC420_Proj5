@@ -194,12 +194,10 @@ class KDtree():
         return NodeLeaf(merged_data)
             
 
-    # ... [rest of your KDtree class]
 
     def knn(self, k: int, point: tuple[int]) -> str:
         leaves_checked = 0
         knn_heap = []  # Using a max-heap to store nearest neighbors
-        # Priority queue to store the node to visit next along with minimum possible distance to the bounding box of the node
         to_visit = PriorityQueue()
         to_visit.put((0, self.root, 0))  # Starting with the root node
 
@@ -227,7 +225,8 @@ class KDtree():
                 # Calculate the minimum squared distance to the splitting plane
                 split_dist = (point[axis] - node.splitvalue) ** 2
                 # Only consider the other node if we don't have k nearest neighbors yet or the splitting plane is closer
-                if len(knn_heap) < k or split_dist < -knn_heap[0][0]:
+                worst_dist = -knn_heap[0][0] if knn_heap else float('inf')
+                if len(knn_heap) < k or split_dist < worst_dist:
                     to_visit.put((split_dist, other_node, depth + 1))
 
         # Sort results by distance and code
@@ -235,7 +234,9 @@ class KDtree():
         return json.dumps({"leaveschecked": leaves_checked, "points": [datum.to_json() for _, datum in result]}, indent=2)
 
     def _euclidean_distance_squared(self, point1, point2):
+        # Helper method to calculate squared Euclidean distance between two points
         return sum((p1 - p2) ** 2 for p1, p2 in zip(point1, point2))
+
 
 
     def _need_to_explore_further(self, node, target, k, knn_list):

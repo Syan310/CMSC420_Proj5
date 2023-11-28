@@ -191,17 +191,17 @@ class KDtree():
         merged_data = left_child.data + right_child.data
         return NodeLeaf(merged_data)
             
+
     def knn(self, k: int, point: tuple[int]) -> str:
         leaves_checked = [0]  # Use a list for mutable count
-        knn_list = PriorityQueue()
+        knn_list = []  # Use a list for the heap
         self._knn_search(self.root, point, k, knn_list, 0, leaves_checked)
 
-        # Constructing the result list from the priority queue
-        result = []
-        while not knn_list.empty():
-            result.append(knn_list.get()[1])
+        # Constructing the result list from the heap
+        result = [heapq.heappop(knn_list)[1] for _ in range(len(knn_list))]
+        result.reverse()  # Reverse to get the closest neighbors first
 
-        return json.dumps({"leaveschecked": leaves_checked[0], "points": [datum.to_json() for datum in reversed(result)]}, indent=2)
+        return json.dumps({"leaveschecked": leaves_checked[0], "points": [datum.to_json() for datum in result]}, indent=2)
 
     def _knn_search(self, node, target, k, knn_list, depth, leaves_checked):
         if node is None:
@@ -211,8 +211,11 @@ class KDtree():
             leaves_checked[0] += 1
             for datum in node.data:
                 distance = self._euclidean_distance(datum.coords, target)
-                if knn_list.qsize() < k or -distance > knn_list.queue[0][0]:
-                    heapq.heappushpop(knn_list, (-distance, datum)) if knn_list.qsize() == k else heapq.heappush(knn_list, (-distance, datum))
+                if len(knn_list) < k:
+                    heapq.heappush(knn_list, (-distance, datum))
+                else:
+                    if -distance > knn_list[0][0]:  # Compare with the largest distance in the heap
+                        heapq.heappushpop(knn_list, (-distance, datum))
             return
 
         # Decide which subtree to explore first
@@ -227,6 +230,7 @@ class KDtree():
         # Explore the farther subtree if needed
         if len(knn_list) < k or abs(target[dim] - node.splitvalue) < -knn_list[0][0]:
             self._knn_search(farther, target, k, knn_list, depth + 1, leaves_checked)
+
 
 
 

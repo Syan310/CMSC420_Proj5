@@ -193,15 +193,13 @@ class KDtree():
             
 
     def knn(self, k: int, point: tuple[int]) -> str:
-        leaves_checked = [0]  # Use a list for mutable count
-        knn_list = []  # Use a list for the heap
+        leaves_checked = [0]
+        knn_list = []
         self._knn_search(self.root, point, k, knn_list, 0, leaves_checked)
 
-        # Constructing the result list from the heap
-        result = [heapq.heappop(knn_list)[1] for _ in range(len(knn_list))]
-        result.reverse()  # Reverse to get the closest neighbors first
-
-        return json.dumps({"leaveschecked": leaves_checked[0], "points": [datum.to_json() for datum in result]}, indent=2)
+        # Construct result list
+        result = sorted(knn_list, key=lambda x: (x[0], x[1].code))
+        return json.dumps({"leaveschecked": leaves_checked[0], "points": [datum.to_json() for _, datum in result]}, indent=2)
 
     def _knn_search(self, node, target, k, knn_list, depth, leaves_checked):
         if node is None:
@@ -211,27 +209,22 @@ class KDtree():
             leaves_checked[0] += 1
             for datum in node.data:
                 distance = self._euclidean_distance(datum.coords, target)
-                if len(knn_list) < k:
-                    heapq.heappush(knn_list, (-distance, datum))
-                else:
-                    if -distance > knn_list[0][0]:  # Compare with the largest distance in the heap
-                        heapq.heappushpop(knn_list, (-distance, datum))
+                if len(knn_list) < k or (distance, datum) < max(knn_list):
+                    if len(knn_list) == k:
+                        knn_list.remove(max(knn_list))
+                    knn_list.append((distance, datum))
             return
 
-        # Decide which subtree to explore first
+        # Determine which subtree to explore first
         dim = depth % self.k
-        if target[dim] < node.splitvalue:
-            closer, farther = node.leftchild, node.rightchild
-        else:
-            closer, farther = node.rightchild, node.leftchild
+        closer, farther = (node.leftchild, node.rightchild) if target[dim] < node.splitvalue else (node.rightchild, node.leftchild)
 
+        # Visit the closer subtree
         self._knn_search(closer, target, k, knn_list, depth + 1, leaves_checked)
 
-        # Explore the farther subtree if needed
-        if len(knn_list) < k or abs(target[dim] - node.splitvalue) < -knn_list[0][0]:
+        # Decide whether to visit the farther subtree
+        if len(knn_list) < k or abs(target[dim] - node.splitvalue) < max(knn_list)[0]:
             self._knn_search(farther, target, k, knn_list, depth + 1, leaves_checked)
-
-
 
 
 

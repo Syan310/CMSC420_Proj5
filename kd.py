@@ -224,17 +224,20 @@ class KDtree():
 
         self._knn_search(closer, target, k, knn_list, depth + 1, leaves_checked)
 
-        # Check if we need to explore the farther subtree
-        if self._need_to_explore_further(node, target, k, knn_list):
-            self._knn_search(farther, target, k, knn_list, depth + 1, leaves_checked)
+            # Check if we need to search the farther subtree
+            if len(self.knn_list.queue) < k or self._closer_to_bounding_box(point, node, dim):
+                self._knn_recursive(farther_node, point, k, depth + 1)
 
 
-    def _need_to_explore_further(self, node, target, k, knn_list):
-        if knn_list.qsize() < k:
-            return True
+                
+    def _distance(self, coords1, coords2):
+        return sum((c1 - c2) ** 2 for c1, c2 in zip(coords1, coords2))  # Return squared distance
+    
+    def _closer_to_bounding_box(self, point, node, dim):
+        # Calculate the squared distance for this dimension
+        dist_squared = (point[dim] - node.splitvalue) ** 2
 
-        split_axis_distance = abs(target[node.splitindex] - node.splitvalue)
-        return -split_axis_distance > knn_list.queue[0][0]
+        # Get the squared distance of the farthest point in the current k-nearest neighbors
+        farthest_dist_squared = -self.knn_list.queue[0][0] ** 2  # Negative because the queue stores negative distances
 
-    def _euclidean_distance(self, point1, point2):
-        return math.sqrt(sum((p1 - p2) ** 2 for p1, p2 in zip(point1, point2)))
+        return dist_squared < farthest_dist_squared

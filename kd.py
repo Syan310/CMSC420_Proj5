@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 import heapq
 import json
@@ -202,7 +201,7 @@ class KDtree():
         to_visit.put((0, self.root))
 
         while not to_visit.empty():
-            dist_to_plane, node = to_visit.get()
+            _, node = to_visit.get()
 
             if isinstance(node, NodeLeaf):
                 leaves_checked += 1
@@ -214,15 +213,17 @@ class KDtree():
                         heapq.heappushpop(knn_list, (-d_squared, datum))
             elif isinstance(node, NodeInternal):
                 axis = node.splitindex
+                dist_to_split = (point[axis] - node.splitvalue) ** 2
                 closer_node, farther_node = (node.leftchild, node.rightchild) if point[axis] < node.splitvalue else (node.rightchild, node.leftchild)
-                to_visit.put((0, closer_node))  # Closer node should be visited first
+                
+                # Always visit the closer node first
+                to_visit.put((0, closer_node))  
 
-                # Check if the farther node could have closer points
-                split_dist = (point[axis] - node.splitvalue) ** 2
-                if len(knn_list) < k or split_dist < -knn_list[0][0]:
-                    to_visit.put((split_dist, farther_node))
+                # Decide whether to visit the farther node
+                if len(knn_list) < k or dist_to_split <= -knn_list[0][0]:
+                    to_visit.put((dist_to_split, farther_node))
 
-        # Convert the heap to a sorted list in ascending order of distance
+        # Convert the heap to a sorted list
         knn_list.sort(key=lambda x: (-x[0], x[1].code))
         sorted_knn_list = [datum for _, datum in knn_list]
 
@@ -231,6 +232,7 @@ class KDtree():
             "leaveschecked": leaves_checked,
             "points": [datum.to_json() for datum in sorted_knn_list]
         }, indent=2)
+
 
     def _euclidean_distance_squared(self, point1, point2):
         # Helper method to calculate squared Euclidean distance between two points

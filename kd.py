@@ -197,55 +197,44 @@ class KDtree():
             
     def knn(self, k: int, point: tuple[int]) -> str:
         leaves_checked = 0
-        knn_list = []
-        to_visit = PriorityQueue()
+        knn_heap = []  # This will be a min-heap based on negative distances for nearest neighbors
 
-        # Start with the root node; distance to the root node is 0
-        to_visit.put((0, self.root))
-
-        while not to_visit.empty():
-            _, node = to_visit.get()
-        leaves_checked = 0
-        knn_list = []
-        to_visit = PriorityQueue()
-
-        # Start with the root node; distance to the root node is 0
-        to_visit.put((0, self.root))
-
-        while not to_visit.empty():
-            _, node = to_visit.get()
-
+        def search(node):
+            nonlocal leaves_checked
             if isinstance(node, NodeLeaf):
                 leaves_checked += 1
                 for datum in node.data:
-                    d_squared = self._euclidean_distance_squared(datum.coords, point)
-                    if len(knn_list) < k:
-                        heapq.heappush(knn_list, (-d_squared, datum))
-                    elif d_squared < -knn_list[0][0]:
-                        heapq.heappushpop(knn_list, (-d_squared, datum))
-            elif isinstance(node, NodeInternal):
+                    distance_squared = self._euclidean_distance_squared(datum.coords, point)
+                    if len(knn_heap) < k:
+                        heapq.heappush(knn_heap, (-distance_squared, datum))
+                    elif distance_squared < -knn_heap[0][0]:
+                        heapq.heappushpop(knn_heap, (-distance_squared, datum))
+                return
+
+            if isinstance(node, NodeInternal):
                 axis = node.splitindex
                 dist_to_split = (point[axis] - node.splitvalue) ** 2
-                closer_node, farther_node = (node.leftchild, node.rightchild) if point[axis] < node.splitvalue else (node.rightchild, node.leftchild)
-                
-                # Always visit the closer node first
-                to_visit.put((0, closer_node))  
+                primary, secondary = (node.leftchild, node.rightchild) if point[axis] < node.splitvalue else (node.rightchild, node.leftchild)
 
-                # Decide whether to visit the farther node
-                furthest_point_distance = -knn_list[0][0] if knn_list else float('inf')
-                if len(knn_list) < k or dist_to_split < furthest_point_distance:
-                    to_visit.put((dist_to_split, farther_node))
+                # Always visit the primary subtree first
+                search(primary)
 
-        # Convert the heap to a sorted list
-        knn_list.sort(key=lambda x: (-x[0], x[1].code))
-        sorted_knn_list = [datum for _, datum in knn_list]
+                # Only visit the secondary subtree if it could contain closer points
+                furthest_point_dist = -knn_heap[0][0] if knn_heap else float('inf')
+                if len(knn_heap) < k or dist_to_split < furthest_point_dist:
+                    search(secondary)
+
+        # Start the search from the root
+        search(self.root)
+
+        # Sort the heap to get the list in ascending order of distance
+        sorted_knn_list = sorted([datum for _, datum in knn_heap], key=lambda x: self._euclidean_distance_squared(x.coords, point))
 
         # Generate the output JSON
         return json.dumps({
             "leaveschecked": leaves_checked,
             "points": [datum.to_json() for datum in sorted_knn_list]
         }, indent=2)
-
 
 
     def _euclidean_distance_squared(self, point1, point2):

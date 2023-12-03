@@ -220,7 +220,8 @@ class KDtree():
                 to_visit.put((0, closer_node))  
 
                 # Decide whether to visit the farther node
-                if len(knn_list) < k or dist_to_split <= -knn_list[0][0]:
+                furthest_point_distance = -knn_list[0][0] if knn_list else float('inf')
+                if len(knn_list) < k or dist_to_split < furthest_point_distance:
                     to_visit.put((dist_to_split, farther_node))
 
         # Convert the heap to a sorted list
@@ -232,6 +233,7 @@ class KDtree():
             "leaveschecked": leaves_checked,
             "points": [datum.to_json() for datum in sorted_knn_list]
         }, indent=2)
+
 
 
     def _euclidean_distance_squared(self, point1, point2):

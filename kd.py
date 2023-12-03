@@ -197,7 +197,7 @@ class KDtree():
             
     def knn(self, k: int, point: tuple[int]) -> str:
         leaves_checked = 0
-        knn_heap = []  # This will be a min-heap based on negative distances for nearest neighbors
+        nearest_neighbors = []  # Min-heap based on negative distances
 
         def search(node):
             nonlocal leaves_checked
@@ -205,10 +205,10 @@ class KDtree():
                 leaves_checked += 1
                 for datum in node.data:
                     distance_squared = self._euclidean_distance_squared(datum.coords, point)
-                    if len(knn_heap) < k:
-                        heapq.heappush(knn_heap, (-distance_squared, datum))
-                    elif distance_squared < -knn_heap[0][0]:
-                        heapq.heappushpop(knn_heap, (-distance_squared, datum))
+                    if len(nearest_neighbors) < k:
+                        heapq.heappush(nearest_neighbors, (-distance_squared, datum))
+                    elif distance_squared < -nearest_neighbors[0][0]:
+                        heapq.heappushpop(nearest_neighbors, (-distance_squared, datum))
                 return
 
             if isinstance(node, NodeInternal):
@@ -219,21 +219,17 @@ class KDtree():
                 # Always visit the primary subtree first
                 search(primary)
 
-                # Only visit the secondary subtree if it could contain closer points
-                furthest_point_dist = -knn_heap[0][0] if knn_heap else float('inf')
-                if len(knn_heap) < k or dist_to_split < furthest_point_dist:
+                # Check if secondary subtree should be visited
+                furthest_neighbor_distance = -nearest_neighbors[0][0] if nearest_neighbors else float('inf')
+                if len(nearest_neighbors) < k or dist_to_split <= furthest_neighbor_distance:
                     search(secondary)
 
-        # Start the search from the root
         search(self.root)
 
-        # Sort the heap to get the list in ascending order of distance
-        sorted_knn_list = sorted([datum for _, datum in knn_heap], key=lambda x: self._euclidean_distance_squared(x.coords, point))
-
-        # Generate the output JSON
+        sorted_neighbors = sorted([datum for _, datum in nearest_neighbors], key=lambda x: self._euclidean_distance_squared(x.coords, point))
         return json.dumps({
             "leaveschecked": leaves_checked,
-            "points": [datum.to_json() for datum in sorted_knn_list]
+            "points": [datum.to_json() for datum in sorted_neighbors]
         }, indent=2)
 
 

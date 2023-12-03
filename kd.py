@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 import heapq
 import json
@@ -47,7 +46,7 @@ class KDtree():
         self.k    = k
         self.m    = m
         self.root = root
-
+       
     # For the tree rooted at root, dump the tree to stringified JSON object and return.
     # DO NOT MODIFY.
     def dump(self) -> str:
@@ -68,6 +67,8 @@ class KDtree():
         else:
             dict_repr = _to_dict(self.root)
         return json.dumps(dict_repr,indent=2)
+
+
 
     # Insert the Datum with the given code and coords into the tree.
     # The Datum with the given coords is guaranteed to not be in the tree.
@@ -192,52 +193,47 @@ class KDtree():
         return NodeLeaf(merged_data)
             
     def knn(self, k: int, point: tuple[int]) -> str:
-        leaves_checked = 0  # Initialize leaves checked counter
-        knn_list = PriorityQueue()
-        self._knn_search(self.root, point, k, knn_list, 0, leaves_checked)
+        leaves_checked = 0
+        knn_list = []
+        to_visit = PriorityQueue()
 
-        # Constructing the result list from the priority queue
-        result = []
-        while not knn_list.empty():
-            result.append(knn_list.get()[1])
+        # Start with the root node; distance to the root node is 0
+        to_visit.put((0, self.root))
 
-        return json.dumps({"leaveschecked": leaves_checked, "points": [datum.to_json() for datum in reversed(result)]}, indent=2)
+        while not to_visit.empty():
+            _, node = to_visit.get()
 
-    def _knn_search(self, node, target, k, knn_list, depth, leaves_checked):
-        if node is None:
-            return
-
-        if isinstance(node, NodeLeaf):
-            leaves_checked += 1  # Increment leaves checked when a leaf node is visited
-            for datum in node.data:
-                distance = self._euclidean_distance(datum.coords, target)
-                if knn_list.qsize() < k:
-                    knn_list.put((-distance, datum))
-                else:
-                    if -distance > knn_list.queue[0][0]:  # Compare with the largest distance in the queue
-                        knn_list.get()
-                        knn_list.put((-distance, datum))
-            return
-
-        # Decide which subtree to explore first
-        closer, farther = (node.leftchild, node.rightchild) if target[node.splitindex] < node.splitvalue else (node.rightchild, node.leftchild)
-
-        self._knn_search(closer, target, k, knn_list, depth + 1, leaves_checked)
-
-            # Check if we need to search the farther subtree
-            if len(self.knn_list.queue) < k or self._closer_to_bounding_box(point, node, dim):
-                self._knn_recursive(farther_node, point, k, depth + 1)
-
-
+            if isinstance(node, NodeLeaf):
+                leaves_checked += 1
+                for datum in node.data:
+                    d_squared = self._euclidean_distance_squared(datum.coords, point)
+                    if len(knn_list) < k:
+                        heapq.heappush(knn_list, (-d_squared, datum))
+                    elif d_squared < -knn_list[0][0]:
+                        heapq.heappushpop(knn_list, (-d_squared, datum))
+            elif isinstance(node, NodeInternal):
+                axis = node.splitindex
+                dist_to_split = (point[axis] - node.splitvalue) ** 2
+                closer_node, farther_node = (node.leftchild, node.rightchild) if point[axis] < node.splitvalue else (node.rightchild, node.leftchild)
                 
-    def _distance(self, coords1, coords2):
-        return sum((c1 - c2) ** 2 for c1, c2 in zip(coords1, coords2))  # Return squared distance
-    
-    def _closer_to_bounding_box(self, point, node, dim):
-        # Calculate the squared distance for this dimension
-        dist_squared = (point[dim] - node.splitvalue) ** 2
+                # Always visit the closer node first
+                to_visit.put((0, closer_node))  
 
-        # Get the squared distance of the farthest point in the current k-nearest neighbors
-        farthest_dist_squared = -self.knn_list.queue[0][0] ** 2  # Negative because the queue stores negative distances
+                # Decide whether to visit the farther node
+                if len(knn_list) < k or dist_to_split <= -knn_list[0][0]:
+                    to_visit.put((dist_to_split, farther_node))
 
-        return dist_squared < farthest_dist_squared
+        # Convert the heap to a sorted list
+        knn_list.sort(key=lambda x: (-x[0], x[1].code))
+        sorted_knn_list = [datum for _, datum in knn_list]
+
+        # Generate the output JSON
+        return json.dumps({
+            "leaveschecked": leaves_checked,
+            "points": [datum.to_json() for datum in sorted_knn_list]
+        }, indent=2)
+
+
+    def _euclidean_distance_squared(self, point1, point2):
+        # Helper method to calculate squared Euclidean distance between two points
+        return sum((p1 - p2) ** 2 for p1, p2 in zip(point1, point2))

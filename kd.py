@@ -47,6 +47,7 @@ class KDtree():
         self.m    = m
         self.root = root
        
+       
     # For the tree rooted at root, dump the tree to stringified JSON object and return.
     # DO NOT MODIFY.
     def dump(self) -> str:
@@ -67,6 +68,8 @@ class KDtree():
         else:
             dict_repr = _to_dict(self.root)
         return json.dumps(dict_repr,indent=2)
+
+
 
 
 
@@ -193,6 +196,15 @@ class KDtree():
         return NodeLeaf(merged_data)
             
     def knn(self, k: int, point: tuple[int]) -> str:
+        leaves_checked = 0
+        knn_list = []
+        to_visit = PriorityQueue()
+
+        # Start with the root node; distance to the root node is 0
+        to_visit.put((0, self.root))
+
+        while not to_visit.empty():
+            _, node = to_visit.get()
         leaves_checked = 0
         knn_list = []
         to_visit = PriorityQueue()

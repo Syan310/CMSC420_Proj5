@@ -202,13 +202,15 @@ class KDtree():
         def search(node):
             nonlocal leaves_checked
             if isinstance(node, NodeLeaf):
-                leaves_checked += 1
+                
                 for datum in node.data:
                     distance_squared = self._euclidean_distance_squared(datum.coords, point)
                     if len(nearest_neighbors) < k:
                         heapq.heappush(nearest_neighbors, (-distance_squared, datum))
+                        leaves_checked += 1
                     elif distance_squared < -nearest_neighbors[0][0]:
                         heapq.heappushpop(nearest_neighbors, (-distance_squared, datum))
+                        leaves_checked += 1
                 return
 
             if isinstance(node, NodeInternal):

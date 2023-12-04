@@ -202,16 +202,15 @@ class KDtree():
         def search(node):
             nonlocal leaves_checked
             if isinstance(node, NodeLeaf):
-                # Check if this leaf should be processed
-                current_furthest_distance = -nearest_neighbors[0][0] if nearest_neighbors else float('inf')
-                if len(nearest_neighbors) < k or self._bounding_box_distance(node, point) <= current_furthest_distance:
-                    leaves_checked += 1
-                    for datum in node.data:
-                        distance_squared = self._euclidean_distance_squared(datum.coords, point)
-                        if len(nearest_neighbors) < k:
-                            heapq.heappush(nearest_neighbors, (-distance_squared, datum))
-                        elif distance_squared < current_furthest_distance:
-                            heapq.heappushpop(nearest_neighbors, (-distance_squared, datum))
+                for datum in node.data:
+                    distance_squared = self._euclidean_distance_squared(datum.coords, point)
+                    if len(nearest_neighbors) < k:
+                        heapq.heappush(nearest_neighbors, (-distance_squared, datum))
+                        leaves_checked += 1
+                    elif distance_squared < -nearest_neighbors[0][0]:
+                        heapq.heappushpop(nearest_neighbors, (-distance_squared, datum))
+                        if leaves_checked == 0:  # If this is the first leaf being checked
+                            leaves_checked += 1
                 return
 
             if isinstance(node, NodeInternal):
@@ -239,30 +238,3 @@ class KDtree():
     def _euclidean_distance_squared(self, point1, point2):
         # Helper method to calculate squared Euclidean distance between two points
         return sum((p1 - p2) ** 2 for p1, p2 in zip(point1, point2))
-
-    def _bounding_box_distance(self, node, target):
-    # Assuming node.data contains the points in the leaf node
-    # and each point is a tuple (x, y, ...) representing coordinates.
-
-        if not node.data:
-            return float('inf')  # No data in the node, return infinite distance
-
-        # Initialize min and max coordinates for each dimension
-        min_coords = [float('inf')] * len(target)
-        max_coords = [-float('inf')] * len(target)
-
-        # Find the bounding box of the node
-        for datum in node.data:
-            for i, coord in enumerate(datum.coords):
-                min_coords[i] = min(min_coords[i], coord)
-                max_coords[i] = max(max_coords[i], coord)
-
-        # Calculate the squared distance from the target to the bounding box
-        distance_squared = 0
-        for i, coord in enumerate(target):
-            if coord < min_coords[i]:  # Target is left of the bounding box
-                distance_squared += (min_coords[i] - coord) ** 2
-            elif coord > max_coords[i]:  # Target is right of the bounding box
-                distance_squared += (coord - max_coords[i]) ** 2
-
-        return distance_squared

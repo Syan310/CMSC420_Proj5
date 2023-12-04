@@ -202,17 +202,15 @@ class KDtree():
         def search(node):
             nonlocal leaves_checked
             if isinstance(node, NodeLeaf):
-                # Calculate distance from the bounding box of this leaf to the target
-                bbox_distance = self._bounding_box_distance(node, point)
-
-                # Only process this leaf if it's potentially closer
-                if not nearest_neighbors or bbox_distance <= -nearest_neighbors[0][0]:
+                # Check if this leaf should be processed
+                current_furthest_distance = -nearest_neighbors[0][0] if nearest_neighbors else float('inf')
+                if len(nearest_neighbors) < k or self._bounding_box_distance(node, point) <= current_furthest_distance:
                     leaves_checked += 1
                     for datum in node.data:
                         distance_squared = self._euclidean_distance_squared(datum.coords, point)
                         if len(nearest_neighbors) < k:
                             heapq.heappush(nearest_neighbors, (-distance_squared, datum))
-                        elif distance_squared < -nearest_neighbors[0][0]:
+                        elif distance_squared < current_furthest_distance:
                             heapq.heappushpop(nearest_neighbors, (-distance_squared, datum))
                 return
 
@@ -225,7 +223,8 @@ class KDtree():
                 search(primary)
 
                 # Re-evaluate the condition for visiting the secondary subtree
-                if not nearest_neighbors or dist_to_split <= -nearest_neighbors[0][0]:
+                furthest_neighbor_distance = -nearest_neighbors[0][0] if nearest_neighbors else float('inf')
+                if len(nearest_neighbors) < k or dist_to_split <= furthest_neighbor_distance:
                     search(secondary)
 
         search(self.root)

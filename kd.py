@@ -221,7 +221,7 @@ class KDtree():
 
                 # Re-evaluate the condition for visiting the secondary subtree
                 furthest_neighbor_distance = -nearest_neighbors[0][0] if nearest_neighbors else float('inf')
-                if len(nearest_neighbors) < k or dist_to_split <= furthest_neighbor_distance:
+                if len(nearest_neighbors) < k or dist_to_split < furthest_neighbor_distance:
                     search(secondary)
 
         search(self.root)

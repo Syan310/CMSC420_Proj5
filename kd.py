@@ -219,9 +219,9 @@ class KDtree():
                 # Visit the primary subtree
                 search(primary)
 
-                # Recheck condition for visiting secondary subtree
+                # Re-evaluate the condition for visiting the secondary subtree
                 furthest_neighbor_distance = -nearest_neighbors[0][0] if nearest_neighbors else float('inf')
-                if len(nearest_neighbors) < k or dist_to_split <= furthest_neighbor_distance:
+                if len(nearest_neighbors) < k or dist_to_split < furthest_neighbor_distance:
                     search(secondary)
 
         search(self.root)
@@ -232,7 +232,6 @@ class KDtree():
             "leaveschecked": leaves_checked,
             "points": [datum.to_json() for datum in sorted_neighbors]
         }, indent=2)
-
 
     def _euclidean_distance_squared(self, point1, point2):
         # Helper method to calculate squared Euclidean distance between two points

@@ -216,16 +216,17 @@ class KDtree():
                 dist_to_split = (point[axis] - node.splitvalue) ** 2
                 primary, secondary = (node.leftchild, node.rightchild) if point[axis] < node.splitvalue else (node.rightchild, node.leftchild)
 
-                # Always visit the primary subtree first
+                # Visit the primary subtree
                 search(primary)
 
-                # Check if secondary subtree should be visited
+                # Recheck condition for visiting secondary subtree
                 furthest_neighbor_distance = -nearest_neighbors[0][0] if nearest_neighbors else float('inf')
                 if len(nearest_neighbors) < k or dist_to_split <= furthest_neighbor_distance:
                     search(secondary)
 
         search(self.root)
 
+        # Sorting the neighbors based on actual distance (not squared)
         sorted_neighbors = sorted([datum for _, datum in nearest_neighbors], key=lambda x: self._euclidean_distance_squared(x.coords, point))
         return json.dumps({
             "leaveschecked": leaves_checked,
